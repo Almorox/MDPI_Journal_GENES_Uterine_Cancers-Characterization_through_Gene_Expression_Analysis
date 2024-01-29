@@ -9,7 +9,8 @@ The project is divided into three experiments:
 * Determination of a Gene Signature for the Characterization of Three Types of Uterine Tissues: Cervical Cancer, Uterine Corpus Cancer, and Healthy Uterine Tissue (Cervix/Corpus).
 
 * Determination of a Gene Signature for the Characterization of the Two Main Histological Subtypes of Cervix Cancer: Adenocarcinoma and Squamous Cell Carcinoma.
-Study of Cervical Adenosquamous Carcinoma in Relation to the Two Main Histological Subtypes of Cervix Cancer.
+
+* Study of Cervical Adenosquamous Carcinoma in Relation to the Two Main Histological Subtypes of Cervix Cancer.
 
 The flowchart followed to analyze the input data with the scripts stored in this repository is as follows:
 
