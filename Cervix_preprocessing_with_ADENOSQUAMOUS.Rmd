@@ -1,0 +1,255 @@
+---
+title: "Creación de la matriz limpia (clases: ADENO, SQUAMOUS)"
+author: "Lucía Almorox Antón"
+date: "2023-01-24"
+output: html_document
+---
+
+This code was created for the study "Uterine Cervix and Corpus Cancers Characterization through Gene Expression Analysis Using the Knowseq Tool".
+
+Department of Computer Engineering, Automatics and Robotics,University of Granada. C.I.T.I.C., Periodista Rafael G´omez Montero, 2, 18014. Granada, Spain.
+
+luciaalmorox@correo.ugr.es
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(KnowSeq)
+rm(list = ls())
+memory.limit(size=10000)
+set.seed(111)
+```
+
+First, we obtain the sample names from the CESC project that we used for the validation of the ADENO/SQUAMOUS classification. We start from the BatchMatrix to exclude the outliers.
+
+```{r 1}
+# created with the document: Preprocessing_cervix_ADENO_SQUAMOUS.Rmd
+load("batchMatrix_ADENO_SQUAMOUS.RData")
+#load("quality_labels_ADENO_SQUAMOUS.RData")
+cgci <- read.csv("data_info_CGCI.csv",header=T)
+cgci_id <- cgci$Run
+length(cgci_id)
+```
+
+
+```{r}
+ncol(batchMatrix)
+sub_samples_CESC <- colnames(batchMatrix[,colnames(batchMatrix)[!(colnames(batchMatrix) %in% cgci_id)]])
+length(sub_samples_CESC)
+```
+
+
+
+
+Creating the classes of interest.
+
+
+
+```{r}
+samples <- read.table(file = 'CESC_CGCI_samplesheet.tsv', sep = '\t', header = TRUE)
+
+```
+
+```{r}
+library(readr)
+clinical <- read_delim(file = 'clinical.tsv')
+clinical <- clinical %>% dplyr::select(case_submitter_id,primary_diagnosis)
+clinical <- unique(clinical)
+clinical
+```
+
+CGCI
+
+```{r}
+library("dplyr")
+CGCI <- samples %>% filter(Project.ID == 'CGCI-HTMCP-CC') 
+nrow(CGCI)
+Class <- CGCI$Sample.Type
+table(Class)
+Class[Class=='Solid Tissue Normal'] <- 'HEALTHY'
+
+for (i in 1:nrow(CGCI)){
+  if (Class[i] != 'HEALTHY'){
+    CASE_ID_i <- CGCI$Case.ID[i]
+    clinical_i <- clinical[clinical$case_submitter_id==CASE_ID_i,]
+    ENF <- clinical_i$primary_diagnosis[1]
+    Class[i] <- ENF
+  }
+}
+table(Class)
+
+Class[Class=='Adenocarcinoma, endocervical type'|Class=='Adenocarcinoma, NOS'|Class=='Endometrioid adenocarcinoma, NOS' | Class == 'Mucinous adenocarcinoma, endocervical type'] <- 'ADENO'
+Class[ Class=='Warty carcinoma' | Class=='Tumor, NOS' | Class=='Not Reported' | Class == 'Lymphoepithelial carcinoma'] <- 'DELETE'
+Class[Class=='Adenosquamous carcinoma'] <- 'ADENO_SQUAMOUS'
+Class[Class != 'DELETE' & Class != 'ADENO' & Class !='HEALTHY' & Class != 'ADENO_SQUAMOUS'] <- 'SQUAMOUS'
+
+table(Class)
+
+
+
+```
+
+
+```{r}
+# Creamos las variables necesarias
+Run <- paste(CGCI$File.Name,".counts",sep = "")
+Path <- paste("./",CGCI$File.ID,sep = "")
+# Exportamos DataFrame a CSV
+data.info_CGCI <- data.frame(Run = Run, Path = Path, Class = Class)
+data.info_CGCI <- data.info_CGCI[!(data.info_CGCI$Class=='HEALTHY'|data.info_CGCI$Class=='DELETE'),]
+dir.create("adenosquamous")
+setwd("adenosquamous")
+write.csv(file = "WITH_MIXED_data_info_CGCI.csv", x = data.info_CGCI)
+setwd("..")
+```
+
+
+
+```{r}
+CESC <- samples %>% filter(Project.ID == 'TCGA-CESC') 
+
+nrow(CESC)
+Class <- CESC$Sample.Type
+table(Class)
+Class[Class=='Solid Tissue Normal'] <- 'HEALTHY'
+
+for (i in 1:nrow(CESC)){
+  if (Class[i] != 'HEALTHY'){
+    CASE_ID_i <- CESC$Case.ID[i]
+    clinical_i <- clinical[clinical$case_submitter_id==CASE_ID_i,]
+    ENF <- clinical_i$primary_diagnosis[1]
+    Class[i] <- ENF
+  }
+}
+table(Class)
+
+Class[Class=='Adenocarcinoma, endocervical type'|Class=='Adenocarcinoma, NOS'|Class=='Endometrioid adenocarcinoma, NOS' | Class == 'Mucinous adenocarcinoma, endocervical type'] <- 'ADENO'
+Class[ Class=='Warty carcinoma' | Class=='Tumor, NOS' | Class=='Not Reported' | Class == 'Lymphoepithelial carcinoma'] <- 'DELETE'
+Class[Class=='Adenosquamous carcinoma'] <- 'ADENO_SQUAMOUS'
+Class[Class != 'DELETE' & Class != 'ADENO' & Class !='HEALTHY' & Class != 'ADENO_SQUAMOUS'] <- 'SQUAMOUS'
+table(Class)
+
+
+```
+
+
+
+
+
+We create an object with the information related to all the samples.
+
+```{r}
+# Creamos las variables necesarias
+Run <- paste(CESC$File.Name,".counts",sep = "")
+Path <- paste("./",CESC$File.ID,sep = "")
+# Exportamos DataFrame a CSV
+data.info_CESC <- data.frame(Run = Run, Path = Path, Class = Class)
+#write.csv(file = "data_info_STAGES.csv", x = data.info)
+```
+
+We remove the samples whose class is not of interest and save the object as a csv file.
+
+```{r}
+data.info_CESC <- data.info_CESC[!(data.info_CESC$Class=='HEALTHY'|data.info_CESC$Class=='DELETE'),]
+
+table(data.info_CESC$Class)
+#write.csv(file = "data_infoCESC.csv", x = data.info_CESC)
+```
+Undersampling of the SQUAMOUS class (only in CESC PROJECT):
+
+AQUI ES DONDE USAMOS LOS NOMBRES DE MUESTRA EXTRAIDOS AL PRINCIPIO
+
+```{r}
+# adeno <- data.info_CESC[data.info_CESC$Class=='ADENO',]
+# squamous <- data.info_CESC[data.info_CESC$Class=='SQUAMOUS',]
+# adsq <- data.info_CESC[data.info_CESC$Class=='ADENO_SQUAMOUS',]
+# 
+# index_adeno <- sample(seq(1:nrow(adeno)),48)
+# index_squamous <- sample(seq(1:nrow(squamous)),150)
+# index_adsq <- sample(seq(1:nrow(adsq)),nrow(adsq))
+# 
+# adeno64 <- adeno[index_adeno,]
+# squamous64 <- squamous[index_squamous,]
+# adsq64 <- adsq[index_adsq,]
+# 
+# min_data_info_CESC <- rbind(adeno64,squamous64,adsq64)
+# nrow(min_data_info_CESC)
+# head(min_data_info_CESC)
+# setwd("adenosquamous")
+
+min_data_info_CESC <- data.info_CESC %>% filter(Run %in% sub_samples_CESC)
+
+# IMPORTANTE: COGEMOS TB LAS ADENOSQUAMOUS DE CESC:
+adsq <- data.info_CESC[data.info_CESC$Class=='ADENO_SQUAMOUS',]
+min_data_info_CESC <- rbind(min_data_info_CESC, adsq)
+write.csv(file = "adenosquamous/WITH_MIXED_min_data_info_CESC.csv", x = min_data_info_CESC)
+
+```
+
+```{r}
+TOT_INFO <- rbind(data.info_CGCI,min_data_info_CESC)
+setwd("adenosquamous")
+write.csv(file = "TOT_INFO_unders_only_cesc.csv", x = TOT_INFO)
+```
+
+We carry out the necessary preprocessing to obtain the corrected expression matrix of each gene in each sample. We save this matrix and the corresponding labels for the samples that passed the quality filters. These objects will be used in the file "Clasification_cervix_ADENO_SQUAMOUS.Rmd".
+
+```{r}
+
+# Load and merge the count files (genes are in rows and samples are in columns).
+countsInfo <- countsToMatrix("adenosquamous/TOT_INFO_unders_only_cesc.csv", extension = "")
+
+# Export both the data matrix and the labels to new variables
+countsMatrix <- countsInfo$countsMatrix
+labels <- countsInfo$labels
+
+# Get the Gene Symbols and GC content for each gene
+# (if the GC value is too high it is indicative that the sequencing did not go well, 
+# but we will not pay attention to it in this case).
+myAnnotation <- getGenesAnnotation(rownames(countsMatrix))
+
+# Calculate the expression values using the count matrix and the previously acquired annotation
+geneExprMatrix <- calculateGeneExpressionValues(countsMatrix, annotation = myAnnotation)
+# A first normalization is already being done, although it is not the complete normalization. 
+# (the count values are not "raw" anymore).
+save(geneExprMatrix,file="geneEMAT.RData")
+
+
+# Keep only the genes that have a name, that is, those that are known.
+geneExprMatrix <- geneExprMatrix[!is.na(rownames(geneExprMatrix)),]
+# Perform the RNAseq quality analysis: remove those samples 
+# that may have worse quality or whose expression distribution deviates 
+# too much from the distribution of the rest of samples (outliers).
+# If any samples have been removed, the number of columns will be reduced.
+QAResults <- RNAseqQA(geneExprMatrix, toRemoval = TRUE, toPNG=FALSE, toPDF=FALSE)
+
+qualityMatrix <- QAResults$matrix
+
+# Update the Labels object to keep only those that correspond to the samples that 
+# remain after removing outliers.
+qualityLabels2 <- labels[-which(colnames(geneExprMatrix) %in% QAResults$outliers)]
+
+table(qualityLabels2) # We see the number of samples removed from each class.
+
+# We create the SVA model of surrogate variables to address the batch effect.
+  # We observe the plot before removing the batch effect.
+#dataPlot(qualityMatrix, qualityLabels2, mode = "orderedBoxplot")
+batchMatrix2 <- batchEffectRemoval(qualityMatrix, qualityLabels2, method = "sva")
+ # We observe the plot after removing the batch effect.
+#dataPlot(batchMatrix, qualityLabels, mode = "orderedBoxplot")
+
+
+save(batchMatrix2,file="adenosquamous/batchMatrix_ADENO_SQUAMOUS2.RData")
+save(qualityLabels2,file="adenosquamous/quality_labels_ADENO_SQUAMOUS2.RData")
+
+```
+
+We extract the expression data from the mixed samples and save it.
+
+```{r}
+
+
+AS <- batchMatrix2[,which(qualityLabels2=="ADENO_SQUAMOUS")]
+setwd("adenosquamous")
+save(AS,file="ADENO_SQUAMOUS_SAMPLE.RData")
+```

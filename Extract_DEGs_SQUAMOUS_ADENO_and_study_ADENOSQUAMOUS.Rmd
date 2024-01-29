@@ -1,0 +1,111 @@
+
+---
+title: "Clasificación de muestras cancerígenas de cérvix: ADENO - SQUAMOUS"
+author: "Lucía Almorox Antón"
+date: "2023-01-24"
+output: html_document
+---
+
+This code was created for the study "Uterine Cervix and Corpus Cancers Characterization through Gene Expression Analysis Using the Knowseq Tool".
+
+Department of Computer Engineering, Automatics and Robotics,University of Granada. C.I.T.I.C., Periodista Rafael G´omez Montero, 2, 18014. Granada, Spain.
+
+luciaalmorox@correo.ugr.es
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(KnowSeq)
+require(caret)
+rm(list = ls())
+memory.limit(size=10000)
+set.seed(111)
+theme_set(theme_bw() +
+  theme(
+    strip.background = element_rect(fill = "#e3e3e3"),
+    strip.text = element_text(color = "black")
+  ))
+```
+
+
+In this Rmarkdown, we start with the normalized matrix containing CESC and CGCI samples to extract the top DEGs between the ADENO and SQUAMOUS classes of cervical cancer. Subsequently, we use the normalized matrix that includes mixed samples and study the expression of the extracted DEGs in them.
+
+```{r 1}
+# created with the document: VALID_Preprocessing_cervix_ADENO_SQUAMOUS.Rmd
+load("batchMatrix_ADENO_SQUAMOUS.RData")
+load("quality_labels_ADENO_SQUAMOUS.RData")
+cgci <- read.csv("data_info_CGCI.csv",header=T)
+cgci_id <- cgci$Run
+```
+
+```{r}
+table(qualityLabels)
+```
+
+DEGs extration (ADENO - SQUAMOUS).
+
+```{r}
+
+DEGsInfo <- DEGsExtraction( batchMatrix, qualityLabels, lfc = 2, pvalue = 0.001, cov=2)
+
+
+
+# Extract the table of statistics of the differentially expressed genes, 
+  # as well as the filtered matrix with these genes.
+topTable <- DEGsInfo$DEG_Results$DEGs_Table
+topTable
+```
+```{r, fig.height=12, fig.width=12}
+DEGsMatrix <- DEGsInfo$DEG_Results$DEGs_Matrix
+
+# Top-12 boxplots and heatmap
+  dataPlot(DEGsMatrix[1:12,], qualityLabels, mode = "genesBoxplot", toPNG=FALSE, 
+           toPDF=FALSE)
+
+row.names(topTable)[1:12]
+```
+
+We observe the DEGs expression in the normalized matrix with mixed samples (ADENO_SQUAMOUS is an additional class in this matrix).
+
+- First 12 DEGs:
+
+```{r,, fig.height=12, fig.width=12}
+load(file="adenosquamous/quality_labels_ADENO_SQUAMOUS2.RData")
+load(file="adenosquamous/batchMatriX_ADENO_SQUAMOUS2.RData")
+mixed_index <- (qualityLabels2=="ADENO_SQUAMOUS")
+dataPlot(batchMatrix2[row.names(topTable)[1:12],], qualityLabels2, mode = "genesBoxplot", toPNG=T,colours=c('red','green','brown'))
+```
+
+- Next 12 DEGs:
+
+```{r,, fig.height=12, fig.width=12}
+
+mixed_index <- (qualityLabels2=="ADENO_SQUAMOUS")
+dataPlot(batchMatrix2[row.names(topTable)[13:24],], qualityLabels2, mode = "genesBoxplot", toPNG=T)
+```
+
+Now we examine the expression of these genes for CESC and CGCI separately.
+
+```{r}
+
+id_test_new_TF <- colnames(batchMatrix) %in% cgci_id
+table(qualityLabels[id_test_new_TF])
+
+```
+
+- CESC:
+
+```{r, fig.height=12, fig.width=12}
+mixed_cesc <- read.csv('adenosquamous/WITH_MIXED_min_data_info_CESC.csv',header=T)
+mix_cesc_samples <- mixed_cesc$Run
+INDEX_CESC <- colnames(batchMatrix2) %in% mix_cesc_samples
+dataPlot(batchMatrix2[row.names(topTable)[1:12],INDEX_CESC], qualityLabels2[INDEX_CESC], mode = "genesBoxplot", toPNG=T,colours=c('red','green','brown'))
+```
+
+- CGCI:
+```{r, fig.height=12, fig.width=12}
+mixed_cgci <- read.csv('adenosquamous/WITH_MIXED_data_info_CGCI.csv',header=T)
+mix_cgci_samples <- mixed_cgci$Run
+INDEX_CGCI<- colnames(batchMatrix2) %in% mix_cgci_samples
+dataPlot(batchMatrix2[row.names(topTable)[1:12],INDEX_CGCI], qualityLabels2[INDEX_CGCI], mode = "genesBoxplot", toPNG=T,colours=c('red','green','brown'))
+```

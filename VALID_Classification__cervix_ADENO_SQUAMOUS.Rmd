@@ -1,0 +1,297 @@
+
+---
+title: "Clasificación de muestras cancerígenas de cérvix: ADENO - SQUAMOUS"
+author: "Lucía Almorox Antón"
+date: "2023-01-24"
+output: html_document
+---
+
+This code was created for the study "Uterine Cervix and Corpus Cancers Characterization through Gene Expression Analysis Using the Knowseq Tool".
+
+Department of Computer Engineering, Automatics and Robotics,University of Granada. C.I.T.I.C., Periodista Rafael G´omez Montero, 2, 18014. Granada, Spain.
+
+luciaalmorox@correo.ugr.es
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(KnowSeq)
+require(caret)
+rm(list = ls())
+memory.limit(size=10000)
+set.seed(111)
+theme_set(theme_bw() +
+  theme(
+    strip.background = element_rect(fill = "#e3e3e3"),
+    strip.text = element_text(color = "black")
+  ))
+```
+
+
+Modification of the source code of the knn_test function to perform joint normalization of the train and test sets:
+
+```{r}
+knn_test <-function(train,labelsTrain,test,labelsTest,vars_selected, bestK){
+
+  if(!is.data.frame(train) && !is.matrix(train)){
+    
+    stop("The train argument must be a dataframe or a matrix.")
+    
+  }
+  
+  if(dim(train)[1] != length(labelsTrain)){
+    
+    stop("The length of the rows of the argument train must be the same than the length of the lablesTrain. Please, ensures that the rows are the samples and the columns are the variables.")
+    
+  }
+  
+  if(!is.character(labelsTrain)  && !is.factor(labelsTrain)){stop("The class of the labelsTrain parameter must be character vector or factor.")}
+  if(is.character(labelsTrain)){ labelsTrain <- as.factor(labelsTrain) }
+  
+  if(!is.character(labelsTest)  && !is.factor(labelsTest)){stop("The class of the labelsTest parameter must be character vector or factor.")}
+  if(is.character(labelsTest)){ labelsTest <- as.factor(labelsTest) }
+  
+  if(!is.data.frame(test) && !is.matrix(test)){
+    
+    stop("The test argument must be a dataframe or a matrix.")
+    
+  }
+  
+  if(dim(test)[1] != length(labelsTest)){
+    
+    stop("The length of the rows of the argument test must be the same than the length of the lablesTest. Please, ensures that the rows are the samples and the columns are the variables.")
+    
+  }
+  ntrain <- nrow(train)
+  ntest <- nrow(test)
+  train <- train[,vars_selected]
+  test <- test[,vars_selected]
+  train_plus_test <- rbind(train,test)
+  train_plus_test <-  as.data.frame(apply(train_plus_test,2,as.double))
+  #train <- as.data.frame(apply(train,2,as.double))
+  #train <- train[,vars_selected]
+  #test <- as.data.frame(apply(test,2,as.double))
+  #test <- test[,vars_selected]
+  
+  train_plus_test = vapply(train_plus_test, function(x){ 
+    max <- max(x)
+    min <- min(x)
+    if(max >  min){
+      x <- ((x - min) / (max - min)) * 2 - 1
+    }
+    else{
+      x
+    }}, double(nrow(train_plus_test)))
+  
+  train_plus_test <- as.data.frame(train_plus_test)
+  
+  train <- train_plus_test[1:ntrain,]
+  train <- as.data.frame(apply(train,2,as.double))
+  test <- train_plus_test[(ntrain+1):nrow(train_plus_test),]
+  test <- as.data.frame(apply(test,2,as.double))
+
+  accVector <- double()
+  sensVector <- double()
+  specVector <- double()
+  f1Vector <- double()
+  cfMatList  <- list()
+  predictsVector <- list()
+  
+  # Firstly with one variable
+  cat(paste("Testing with ", 1," variables...\n",sep=""))
+  knn_mod = knn3(x = train[, 1, drop=FALSE], y = labelsTrain, k = bestK)
+  predicts <- predict(knn_mod, test[, 1, drop=FALSE], type = "class")
+  
+  cfMat<-confusionMatrix(predicts,labelsTest)
+  if (length(levels(labelsTrain))==2){
+    sens <- cfMat$byClass[[1]]
+    spec <- cfMat$byClass[[2]]
+    f1 <- cfMat$byClass[[7]]
+  } else{
+    sens <- mean(cfMat$byClass[,1])
+    spec <- mean(cfMat$byClass[,2])
+    f1 <- mean(cfMat$byClass[,7])
+  }
+
+  cfMatList[[1]] <- cfMat
+  accVector[1] <- cfMat$overall[[1]]
+  sensVector[1] <- sens
+  specVector[1] <- spec
+  f1Vector[1] <- f1
+  predictsVector[[1]] <- predicts
+  if(is.na(f1Vector[1])) f1Vector[i] <- 0
+  
+  for(i in c(2:dim(test)[2])){
+
+    cat(paste("Testing with ", i," variables...\n",sep=""))
+    knn_mod = knn3(x = train[,seq(i)], y = labelsTrain, k = bestK)
+    predicts <- predict(knn_mod, test[,seq(i)], type = "class")
+
+    cfMat<-confusionMatrix(predicts,labelsTest)
+    
+    if (length(levels(labelsTrain))==2){
+      sens <- cfMat$byClass[[1]]
+      spec <- cfMat$byClass[[2]]
+      f1 <- cfMat$byClass[[7]]
+    } else{
+      sens <- mean(cfMat$byClass[,1])
+      spec <- mean(cfMat$byClass[,2])
+      f1 <- mean(cfMat$byClass[,7])
+    }
+    
+    cfMatList[[i]] <- cfMat
+    accVector[i] <- cfMat$overall[[1]]
+    sensVector[i] <- sens
+    specVector[i] <- spec
+    f1Vector[i] <- f1
+    predictsVector[[i]] <- predicts
+    if(is.na(f1Vector[i])) f1Vector[i] <- 0
+  }
+
+  cat("Classification done successfully!\n")
+  names(accVector) <- vars_selected
+  names(sensVector) <- vars_selected
+  names(specVector) <- vars_selected
+  names(f1Vector) <- vars_selected
+
+  results <- list(cfMatList,accVector,sensVector,specVector,f1Vector,predictsVector)
+  names(results) <- c("cfMats","accVector","sensVector","specVector","f1Vector","predictions")
+  invisible(results)
+
+}
+```
+
+```{r 1}
+# created with the document: VALID_Preprocessing_cervix_ADENO_SQUAMOUS.Rmd
+load("batchMatrix_ADENO_SQUAMOUS.RData")
+load("quality_labels_ADENO_SQUAMOUS.RData")
+cgci <- read.csv("data_info_CGCI.csv",header=T)
+cgci_id <- cgci$Run # CGCI Samples
+```
+
+```{r}
+table(qualityLabels)
+```
+CGCI Samples:
+
+```{r}
+
+id_test_new_TF <- colnames(batchMatrix) %in% cgci_id
+table(qualityLabels[id_test_new_TF])
+
+```
+
+
+# External validation of the gene signature (ICA1L) for the classification of cervical cancer samples in the SQUAMOUS and ADENO classes. 
+
+We use CESC samples for training the kNN model and CESC samples for testing, using ICA1L as the only selected feature.
+
+
+```{r}
+
+i <- 1 # Necessary for knn_test function to work. 
+
+selecc <- c('ICA1L','ICA1L')
+
+
+  set.seed(3)
+  expressionMatrixCorrected <- batchMatrix
+
+
+id_test_new_TF <- colnames(expressionMatrixCorrected) %in% cgci_id
+
+
+
+  # samples in columns. Select train (CESC) samples.
+XTRN =expressionMatrixCorrected[,!id_test_new_TF] 
+YTRN= qualityLabels[!id_test_new_TF]
+  # Select test (CGCI) SAMPLES
+XTEST = expressionMatrixCorrected[,id_test_new_TF]
+YTEST=qualityLabels[id_test_new_TF]
+ 
+
+
+MLMatrix <- t(XTRN) # Genes in columns and samples in rows.
+MLLabels <- YTRN #
+
+
+knn_trn <- knn_trn(MLMatrix, MLLabels, vars_selected = selecc, numFold=5) # 5-fold CV for
+# controlling overfitting.
+
+knn_results <- rbind(knn_trn$accuracyInfo$meanAccuracy,        knn_trn$sensitivityInfo$meanSensitivity,knn_trn$specificityInfo$meanSpecificity)
+
+cat("train accuracy: ",knn_trn$accuracyInfo$meanAccuracy,"\n")
+
+#FOLDS_ACC_TRN <- rbind(FOLDS_ACC_TRN,unname(knn_trn$accuracyInfo$meanAccuracy))
+#dataPlot(knn_results, MLLabels, legend = c("Mean Accuracy","Mean Sensitivity",
+#                                           "Mean Specificity"), mode = "classResults", xlab="# Genes", ylab="Prediction Score")
+
+
+#dataPlot(t(MLMatrix[,selecc]), MLLabels, mode = "heatmap")
+#dataPlot(knn_trn$cfMats[[3]]$table, MLLabels, mode = "confusionMatrix")
+#dataPlot(t(MLMatrix[,selecc]), MLLabels, mode = "genesBoxplot")
+
+
+# TEST
+
+ 
+ results_test_knn <- knn_test(MLMatrix, MLLabels, t(XTEST),
+YTEST, selecc, bestK = knn_trn$bestK)
+ 
+ # FOLDS_ACC_TST <- rbind(FOLDS_ACC_TST,unname(results_test_knn$accVector))
+ 
+ 
+  Mat_test <- results_test_knn$cfMats[[1]]$table
+
+dataPlot(Mat_test, YTEST, mode = "confusionMatrix")
+
+
+
+
+```
+Gene signature successfully externally validated.
+
+We observe the expression of the uni-gene signature for the entire dataset (CESC and CGCI) and for CGCI.
+
+
+- Both datasets:
+
+```{r, fig.height=5, fig.width=5}
+
+selecc <- c('ICA1L', 'ICA1L')
+dataPlot(batchMatrix[selecc,], qualityLabels, mode = "genesBoxplot")
+```
+
+- CGCI:
+
+```{r, fig.height=5, fig.width=5}
+dataPlot(XTEST[selecc,], YTEST, mode = "genesBoxplot")
+```
+
+
+- CESC:
+
+```{r, fig.height=5, fig.width=5}
+dataPlot(XTRN[selecc,], YTRN, mode = "genesBoxplot")
+
+# TO MAKE SQUAMOUS COME FIRST ON THE X-AXIS
+YTRN2 <- c(YTRN[48:196],YTRN[1:47])
+XTRN2 <-cbind(XTRN[,48:196],XTRN[,1:47])
+dataPlot(XTRN2[selecc,], YTRN2, mode = "genesBoxplot")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
